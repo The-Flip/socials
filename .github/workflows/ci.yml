@@ -29,6 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job only reads; don't leave the GITHUB_TOKEN in git config on the runner.
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5

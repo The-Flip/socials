@@ -18,6 +18,7 @@ Read the relevant docs before reviewing code:
 | [`docs/Testing.md`](../../docs/Testing.md)             | Test patterns, layout, and conventions                   |
 | [`docs/Workflow.md`](../../docs/Workflow.md)           | Branch / PR / review process                             |
 | [`docs/plans/README.md`](../../docs/plans/README.md)   | The ADR convention for significant changes               |
+| [`docs/AGENTS.src.md`](../../docs/AGENTS.src.md)       | Authoritative source for the generated agent docs        |
 
 Also check [`CLAUDE.md`](../../CLAUDE.md) (generated from `docs/AGENTS.src.md`), which
 repeats much of the above so it always loads into the agent's context. **Documentation

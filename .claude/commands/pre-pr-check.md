@@ -41,7 +41,7 @@ Guide the user through each step systematically. For each step:
 
 **Documentation Review:**
 
-- Use the Task tool with subagent_type="documentation-reviewer" on all new/modified code
+- Use the Task tool with subagent_type="documentation-reviewer" on all new/modified files
 - Check: pattern compliance against `docs/*.md`, documentation gaps, clarity, verbosity, updates needed
 - Report findings and wait for the user to address before continuing
 
@@ -52,17 +52,17 @@ Guide the user through each step systematically. For each step:
 
 **Antipattern Scan:**
 
-- Use the Task tool with subagent_type="antipattern-scanner" on all new/modified code
+- Use the Task tool with subagent_type="antipattern-scanner" on all new/modified files
 - Report findings and wait for the user to address before continuing
 
 **Clean Code Review:**
 
-- Use the Task tool with subagent_type="clean-code-reviewer" on all new/modified code
+- Use the Task tool with subagent_type="clean-code-reviewer" on all new/modified files
 - Report findings and wait for the user to address before continuing
 
 **Code Smell Detection:**
 
-- Use the Task tool with subagent_type="code-smell-detector" on all new/modified code
+- Use the Task tool with subagent_type="code-smell-detector" on all new/modified files
 - Report findings for the user's consideration
 
 ### 4. Test Quality Validation

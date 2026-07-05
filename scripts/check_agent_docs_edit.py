@@ -16,14 +16,16 @@ SOURCES = {"docs/AGENTS.src.md", "scripts/build_agent_docs.py"}
 
 
 def main() -> int:
+    # NUL-delimited so paths with spaces/tabs parse correctly.
     staged = set(
         subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
+            ["git", "diff", "--cached", "--name-only", "-z"],
             capture_output=True,
             text=True,
             check=True,
-        ).stdout.split()
+        ).stdout.split("\0")
     )
+    staged.discard("")
 
     # Nothing to check unless a generated file is actually staged.
     if not (GENERATED & staged):

@@ -220,7 +220,9 @@ def test_with_conditional_skip():
 
 **CRITICAL DETECTION RULES:**
 
-- **Flag any `Mock()` or `@patch` usage** - mocking should only be done after user confirmation
+- **Review `Mock()` / `@patch` usage** when it replaces an available fixture or hides a real
+  integration path — not all mocking is an antipattern (see `docs/Testing.md`: faking an
+  external service like the Instagram/Discord API is legitimate when done deliberately)
 - **Look for `conftest.py`** - check if real fixtures exist that should be used instead
 - **Detect "fake" or "dummy" test data** - suggest using actual fixtures
 - **Flag tests that don't exercise real code paths** - they should use actual system components
