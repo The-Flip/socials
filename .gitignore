@@ -1,0 +1,11 @@
+.env
+.envrc
+.venv/
+__pycache__/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# JetBrains IDE module file — keep locally, never commit.
+.idea/socials.iml
