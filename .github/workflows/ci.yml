@@ -1,0 +1,60 @@
+name: CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      # Note: docs/AGENTS.src.md (.md) is intentionally NOT ignored — editing it must run
+      # the agent-docs drift check below. Only agent/editor config is skipped.
+      - ".claude/**"
+      - ".idea/**"
+      - ".env.example"
+      - ".gitignore"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      # Note: docs/AGENTS.src.md (.md) is intentionally NOT ignored — editing it must run
+      # the agent-docs drift check below. Only agent/editor config is skipped.
+      - ".claude/**"
+      - ".idea/**"
+      - ".env.example"
+      - ".gitignore"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This job only reads; don't leave the GITHUB_TOKEN in git config on the runner.
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Verify agent docs are up to date
+        run: |
+          uv run python scripts/build_agent_docs.py
+          git diff --exit-code CLAUDE.md AGENTS.md
+
+      - name: Check formatting
+        run: uv run ruff format . --check
+
+      - name: Run linting
+        run: uv run ruff check .
+
+      - name: Run type checking
+        run: uv run mypy socials
+
+      - name: Run tests
+        run: uv run pytest

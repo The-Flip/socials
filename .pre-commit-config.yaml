@@ -1,0 +1,79 @@
+# Pre-commit hooks configuration
+# Install with: pre-commit install && pre-commit install --hook-type pre-push
+# Run manually: pre-commit run --all-files
+# See https://pre-commit.com for more information
+
+repos:
+  # Ruff - fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.7
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Prettier - Markdown formatter only (no JS/CSS in this project yet)
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.7.4
+    hooks:
+      - id: prettier
+        types_or: [markdown]
+        # Generated agent docs are formatted by the build script, not prettier.
+        exclude: ^(CLAUDE|AGENTS)\.md$
+
+  # Guardrails and file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+      - id: detect-private-key
+      - id: trailing-whitespace
+        exclude: '\.md$'
+      - id: end-of-file-fixer
+        exclude: '\.md$'
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  - repo: local
+    hooks:
+      # Type checking - runs mypy from the uv-managed environment
+      - id: mypy
+        name: mypy
+        entry: uv run mypy socials
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+      # Regenerate agent docs when the source or build script changes
+      - id: agent-docs
+        name: agent-docs
+        entry: bash -c 'uv run python scripts/build_agent_docs.py && git add CLAUDE.md AGENTS.md'
+        language: system
+        files: ^(docs/AGENTS\.src\.md|scripts/build_agent_docs\.py)$
+        pass_filenames: false
+
+      # Block direct edits to the generated agent docs
+      - id: agent-docs-no-direct-edit
+        name: agent-docs-no-direct-edit
+        entry: uv run python scripts/check_agent_docs_edit.py
+        language: system
+        files: ^(CLAUDE|AGENTS)\.md$
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Run the test suite before push
+      - id: tests
+        name: tests
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
