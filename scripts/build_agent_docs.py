@@ -49,7 +49,9 @@ def generate_output(source_lines: list[str], target: str) -> str:
     other_target = "AGENTS" if target == "CLAUDE" else "CLAUDE"
 
     for line in source_lines:
-        stripped = line.strip()
+        # Match markers only when they start at column 0 (rstrip, don't lstrip) so an
+        # indented code block that *documents* the marker syntax isn't treated as a marker.
+        stripped = line.rstrip()
 
         # Check for IGNORE markers (stripped from both outputs)
         if stripped == "START_IGNORE":

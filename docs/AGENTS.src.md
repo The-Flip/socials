@@ -97,19 +97,21 @@ Every change follows this loop. The two authoritative reviewers are **AGY** (the
 review agent, run interactively) and **CodeRabbit** (on the PR). Other agents are advisory.
 
 1. **Branch** — `type/short-description` (see the `branch` skill).
-2. **Plan → AGY** — for a non-trivial change, write the plan and have it reviewed by **AGY**
-   before implementing.
+2. **Plan → AGY** — for a non-trivial change, write the plan as `docs/plans/<name>.md` and have
+   it reviewed by **AGY** before implementing: `make review-plan PLAN=docs/plans/<name>.md`.
 3. **Implement** with tests.
 4. **Local review (advisory)** — run the reviewer subagents / `/pre-pr-check`. See below.
 5. **Change set → AGY** — have **AGY** review the finished change set **before opening the
-   PR**. Fix any legitimate concerns it raises first. Do not open the PR until AGY has
-   reviewed and those concerns are resolved.
+   PR**: `make review-change`. Evaluate its findings, fix the legitimate ones, and don't open
+   the PR until AGY has reviewed and those concerns are resolved.
 6. **PR → CodeRabbit** — only now open a PR against `main`; **CodeRabbit** reviews it
    automatically. Address its findings in follow-up commits.
 7. **Merge** once CI is green.
 
-AGY reviews **before** the PR is opened; CodeRabbit reviews **on** the PR. Keeping AGY first
-means the change set is already in good shape before it reaches CodeRabbit and CI.
+**AGY** is [Google Antigravity's `agy` CLI](https://antigravity.google/); `make review-plan` /
+`make review-change` run it in read-only print mode (it critiques, it does not edit files).
+AGY reviews **before** the PR is opened; CodeRabbit reviews **on** the PR — so the change set
+is already in good shape before it reaches CodeRabbit and CI.
 
 Agents other than AGY and CodeRabbit are **advisory**: evaluate their findings carefully,
 but don't blindly trust them. When reviewers **conflict** and you can't reconcile them, hand
@@ -189,6 +191,13 @@ make format      # Ruff formatter
 make typecheck   # mypy type checking
 make precommit   # Run all pre-commit hooks
 make agent-docs  # Regenerate CLAUDE.md and AGENTS.md from docs/AGENTS.src.md
+```
+
+### Review (AGY)
+
+```bash
+make review-plan PLAN=docs/plans/<name>.md   # AGY reviews a plan before implementation
+make review-change                           # AGY reviews the branch's change set before the PR
 ```
 
 ## Architecture

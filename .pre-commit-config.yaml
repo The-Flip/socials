@@ -63,9 +63,10 @@ repos:
       # Block direct edits to the generated agent docs
       - id: agent-docs-no-direct-edit
         name: agent-docs-no-direct-edit
-        entry: scripts/check_agent_docs_edit.sh
+        entry: uv run python scripts/check_agent_docs_edit.py
         language: system
         files: ^(CLAUDE|AGENTS)\.md$
+        pass_filenames: false
         stages: [pre-commit]
 
       # Run the test suite before push

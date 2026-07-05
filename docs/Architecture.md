@@ -27,7 +27,10 @@ shape is expected to grow into roughly three layers, each introduced with its ow
 ## Conventions
 
 - **Secrets** (Instagram/Discord tokens) come from the environment — see `.env.example`.
-  Never hardcode credentials.
+  Never hardcode credentials. When the first credential-consuming feature lands, the CLI should
+  auto-load a local `.env` at startup (via `python-dotenv`) so volunteers don't have to manage
+  shell exports — deliberately deferred until there's a secret to load, to avoid an unused
+  dependency.
 - **Dependencies** are added with `uv add` / `uv add --dev` at their latest stable version.
 - **One module, one responsibility.** Keep fetching, analysis, formatting, and delivery
   separable rather than fused into one command function.

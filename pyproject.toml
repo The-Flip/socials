@@ -37,8 +37,9 @@ ignore = ["E501", "S101"]
 "tests/*.py" = ["S101", "S105", "S106", "S107"]
 # The CLI prints to the terminal — that's its user interface, not stray debug output.
 "socials/cli.py" = ["T20"]
-# Dev scripts are runnable CLIs; print is their progress output.
-"scripts/*.py" = ["T20"]
+# Dev scripts are runnable CLIs: print is their progress output, and invoking `git`
+# from PATH with fixed arguments is intended (not untrusted input).
+"scripts/*.py" = ["T20", "S603", "S607"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["socials"]
