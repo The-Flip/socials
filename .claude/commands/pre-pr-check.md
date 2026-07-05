@@ -91,7 +91,8 @@ Guide the user through each step systematically. For each step:
 
 1. Summary of checklist completion status
 2. List of any remaining concerns or warnings
-3. Confirmation that code is ready for PR, OR a list of items that need attention
+3. Confirmation that the change set is ready for **AGY review** (which precedes opening the
+   PR), OR a list of items that need attention first
 
 ## Important Notes
 

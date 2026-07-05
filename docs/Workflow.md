@@ -14,10 +14,15 @@ review agent, run interactively) and **CodeRabbit** (on the PR). Everything else
 4. **Local pre-PR review (advisory)** — run `/pre-pr-check`, which runs `make quality`, the
    tests, and the reviewer subagents (`documentation-reviewer`, `antipattern-scanner`,
    `clean-code-reviewer`, `code-smell-detector`). Address what matters.
-5. **PR → CodeRabbit** — open a PR against `main`. **CodeRabbit** reviews it automatically;
-   address its findings in follow-up commits (`fix(...): address CodeRabbit review`).
-6. **Change set → AGY** — have the finished change set reviewed by **AGY**.
+5. **Change set → AGY** — have **AGY** review the finished change set **before opening the
+   PR**. Fix any legitimate concerns first. **Do not open the PR until AGY has reviewed and
+   those concerns are resolved.**
+6. **PR → CodeRabbit** — only now open a PR against `main`. **CodeRabbit** reviews it
+   automatically; address its findings in follow-up commits (`fix(...): address CodeRabbit review`).
 7. **Merge** once CI is green.
+
+The order is deliberate: **AGY first (pre-PR), then CodeRabbit (on the PR).** AGY sees a clean
+change set, and CodeRabbit/CI only run once it's already in good shape.
 
 ## Quality gate
 

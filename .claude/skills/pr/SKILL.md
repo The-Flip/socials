@@ -54,9 +54,10 @@ Apply all labels that fit. Only use these labels:
 
 ## Review
 
-After opening the PR, **CodeRabbit** reviews it automatically. Address its findings in
-follow-up commits (`fix(...): address CodeRabbit review`). Then have the finished change set
-reviewed by **AGY**. See [`docs/Workflow.md`](../../../docs/Workflow.md).
+**Before opening the PR**, have **AGY** review the finished change set and fix any legitimate
+concerns. Only open the PR once AGY has reviewed and those concerns are resolved — then
+**CodeRabbit** reviews the PR automatically; address its findings in follow-up commits
+(`fix(...): address CodeRabbit review`). See [`docs/Workflow.md`](../../../docs/Workflow.md).
 
 ## Instructions
 

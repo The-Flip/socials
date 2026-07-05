@@ -89,11 +89,16 @@ review agent, run interactively) and **CodeRabbit** (on the PR). Other agents ar
 2. **Plan → AGY** — for a non-trivial change, write the plan and have it reviewed by **AGY**
    before implementing.
 3. **Implement** with tests.
-4. **Local review (advisory)** — the reviewer subagents run before opening a PR. See below.
-5. **PR → CodeRabbit** — open a PR against `main`; **CodeRabbit** reviews it automatically.
-   Address its findings in follow-up commits.
-6. **Change set → AGY** — have the finished change set reviewed by **AGY**.
+4. **Local review (advisory)** — run the reviewer subagents / `/pre-pr-check`. See below.
+5. **Change set → AGY** — have **AGY** review the finished change set **before opening the
+   PR**. Fix any legitimate concerns it raises first. Do not open the PR until AGY has
+   reviewed and those concerns are resolved.
+6. **PR → CodeRabbit** — only now open a PR against `main`; **CodeRabbit** reviews it
+   automatically. Address its findings in follow-up commits.
 7. **Merge** once CI is green.
+
+AGY reviews **before** the PR is opened; CodeRabbit reviews **on** the PR. Keeping AGY first
+means the change set is already in good shape before it reaches CodeRabbit and CI.
 
 Agents other than AGY and CodeRabbit are **advisory**: evaluate their findings carefully,
 but don't blindly trust them. When reviewers **conflict** and you can't reconcile them, hand
