@@ -78,6 +78,6 @@ def report(hours: int, queue_days: int) -> None:
     click.echo(render_text(build_last_24h(sent, channels, now, hours=hours)), nl=False)
     click.echo("")
     if queue is None:
-        click.echo("Queued — could not fetch the queue from Buffer this time.")
+        click.echo("Queued\n  ⚠ Could not fetch the queue from Buffer this time.")
     else:
         click.echo(render_queue(build_queue(queue, now, horizon_days=queue_days)), nl=False)
