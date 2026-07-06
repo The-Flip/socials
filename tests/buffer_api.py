@@ -13,12 +13,22 @@ API_URL = "https://api.buffer.com"
 
 
 def node(sent_at, service, name, link, metrics=(), *, channel_id="c"):
-    """Build a post node as the API returns it. `metrics` is an iterable of (name, value, unit)."""
+    """Build a sent-post node as the API returns it. `metrics` is (name, value, unit) tuples."""
     return {
         "sentAt": sent_at,
         "channel": {"id": channel_id, "service": service, "name": name},
         "externalLink": link,
         "metrics": [{"name": n, "value": v, "unit": u} for n, v, u in metrics],
+    }
+
+
+def queued_node(due_at, service, name, *, status="scheduled", channel_id="c", assets=()):
+    """Build a queued-post node. `assets` is a list of __typename strings (e.g. 'VideoAsset')."""
+    return {
+        "dueAt": due_at,
+        "status": status,
+        "channel": {"id": channel_id, "service": service, "name": name},
+        "assets": [{"__typename": a} for a in assets],
     }
 
 
@@ -29,15 +39,32 @@ def posts_page(nodes, *, has_next=False):
     }
 
 
-def gql_router(*, account=None, channels=None, posts_pages=None, http_status=200, gql_error=None):
-    """Return a respx side-effect that answers account/channels/posts queries in turn.
+def gql_router(
+    *,
+    account=None,
+    channels=None,
+    posts_pages=None,
+    scheduled_pages=None,
+    approval_pages=None,
+    http_status=200,
+    gql_error=None,
+):
+    """Return a respx side-effect answering account/channels/sent/scheduled/approval queries.
 
-    `posts_pages` is a list of page payloads returned in order (for pagination tests).
-    `http_status` != 200 makes every call fail with that status; `gql_error` returns a
-    GraphQL error body on a 200.
+    The `*_pages` lists are returned in order (for pagination tests). `http_status` != 200 makes
+    every call fail with that status; `gql_error` returns a GraphQL error body on a 200.
     """
-    pages = list(posts_pages or [])
-    state = {"page": 0}
+    pages = {
+        "sent": list(posts_pages or []),
+        "scheduled": list(scheduled_pages or []),
+        "approval": list(approval_pages or []),
+    }
+    counters = {"sent": 0, "scheduled": 0, "approval": 0}
+
+    def pick(key):
+        index = counters[key]
+        counters[key] += 1
+        return pages[key][index] if index < len(pages[key]) else posts_page([])
 
     def handler(request):
         if http_status != 200:
@@ -50,10 +77,13 @@ def gql_router(*, account=None, channels=None, posts_pages=None, http_status=200
         if "channels(" in query:
             return httpx.Response(200, json={"data": {"channels": channels or []}})
         if "posts(" in query:
-            index = state["page"]
-            state["page"] += 1
-            page = pages[index] if index < len(pages) else posts_page([])
-            return httpx.Response(200, json={"data": {"posts": page}})
+            if "status: scheduled" in query:
+                key = "scheduled"
+            elif "status: needs_approval" in query:
+                key = "approval"
+            else:
+                key = "sent"
+            return httpx.Response(200, json={"data": {"posts": pick(key)}})
         return httpx.Response(200, json={"data": {}})
 
     return handler

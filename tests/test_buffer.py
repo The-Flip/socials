@@ -4,11 +4,12 @@ from datetime import UTC, datetime
 
 import pytest
 import respx
-from buffer_api import API_URL, gql_router, node, posts_page
+from buffer_api import API_URL, gql_router, node, posts_page, queued_node
 
 from socials.buffer import BufferClient, BufferError, Channel
 
 WINDOW = (datetime(2026, 7, 4, tzinfo=UTC), datetime(2026, 7, 5, tzinfo=UTC))
+NOW = datetime(2026, 7, 6, tzinfo=UTC)
 
 
 def client() -> BufferClient:
@@ -107,3 +108,45 @@ def test_http_500_raises_buffer_error() -> None:
     respx.post(API_URL).mock(side_effect=gql_router(http_status=500))
     with client() as buffer, pytest.raises(BufferError, match="HTTP 500"):
         buffer.organization_id()
+
+
+@respx.mock
+def test_queued_posts_scheduled_sorted_with_media_and_approval() -> None:
+    """Scheduled posts are sorted soonest-first with a media label; approval fetched separately."""
+    scheduled = posts_page(
+        [
+            queued_node("2026-07-09T14:00:00.000Z", "instagram", "ig", assets=["VideoAsset"]),
+            queued_node("2026-07-07T09:00:00.000Z", "facebook", "fb"),
+        ]
+    )
+    approval = posts_page(
+        [queued_node("2026-07-08T10:00:00.000Z", "instagram", "ig", status="needs_approval")]
+    )
+    respx.post(API_URL).mock(
+        side_effect=gql_router(scheduled_pages=[scheduled], approval_pages=[approval])
+    )
+    with client() as buffer:
+        queue = buffer.queued_posts("org1", NOW, horizon_days=7)
+    assert [p.channel_service for p in queue.scheduled] == ["facebook", "instagram"]
+    assert queue.scheduled[1].media_type == "video"
+    assert [p.status for p in queue.awaiting_approval] == ["needs_approval"]
+    assert queue.truncated is False
+
+
+@respx.mock
+def test_queued_posts_empty() -> None:
+    respx.post(API_URL).mock(side_effect=gql_router())
+    with client() as buffer:
+        queue = buffer.queued_posts("org1", NOW)
+    assert queue.scheduled == []
+    assert queue.awaiting_approval == []
+
+
+@respx.mock
+def test_queued_posts_truncates_at_page_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("socials.buffer.MAX_PAGES", 2)
+    page = posts_page([queued_node("2026-07-07T09:00:00.000Z", "facebook", "fb")], has_next=True)
+    respx.post(API_URL).mock(side_effect=gql_router(scheduled_pages=[page, page, page]))
+    with client() as buffer:
+        queue = buffer.queued_posts("org1", NOW)
+    assert queue.truncated is True

@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
-from socials.buffer import Channel, Metric, Post, SentPosts
-from socials.report import build_last_24h, render_text
+from socials.buffer import Channel, Metric, Post, Queue, QueuedPost, SentPosts
+from socials.report import build_last_24h, build_queue, render_queue, render_text
 
 NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 IG = Channel("i", "theflipchicago", "instagram", False)
@@ -74,3 +74,53 @@ def test_empty_window_gives_friendly_message():
 def test_truncation_is_surfaced():
     report = build_last_24h(sent([post(1, IG)], truncated=True), [IG], NOW)
     assert "truncated" in render_text(report)
+
+
+def qpost(days_ahead, service, *, name="acct", status="scheduled", media=None):
+    return QueuedPost(
+        due_at=NOW + timedelta(days=days_ahead),
+        channel_id="x",
+        channel_service=service,
+        channel_name=name,
+        status=status,
+        media_type=media,
+    )
+
+
+def test_build_queue_filters_horizon_and_sorts():
+    """Posts beyond the horizon are dropped; the rest are sorted soonest-first."""
+    queue = Queue(
+        scheduled=[qpost(5, "instagram"), qpost(1, "facebook"), qpost(30, "instagram")],
+        awaiting_approval=[],
+        truncated=False,
+    )
+    built = build_queue(queue, NOW, horizon_days=7)
+    assert [p.channel_service for p in built.scheduled] == ["facebook", "instagram"]
+
+
+def test_render_queue_empty_alert_is_approval_aware():
+    queue = Queue(
+        scheduled=[],
+        awaiting_approval=[qpost(2, "instagram", status="needs_approval")],
+        truncated=False,
+    )
+    out = render_queue(build_queue(queue, NOW))
+    assert "Nothing scheduled" in out
+    assert "awaiting approval" in out
+
+
+def test_render_queue_lists_scheduled_with_media_and_low_warning():
+    queue = Queue(
+        scheduled=[qpost(1, "instagram", media="video")], awaiting_approval=[], truncated=False
+    )
+    out = render_queue(build_queue(queue, NOW))
+    assert "Instagram" in out
+    assert "[Video]" in out
+    assert "running low" in out
+
+
+def test_render_queue_truncation_note():
+    queue = Queue(
+        scheduled=[qpost(1, "facebook"), qpost(2, "facebook")], awaiting_approval=[], truncated=True
+    )
+    assert "truncated" in render_queue(build_queue(queue, NOW))

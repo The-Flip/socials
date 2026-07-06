@@ -9,8 +9,14 @@ from datetime import UTC, datetime, timedelta
 import click
 
 from socials import config
-from socials.buffer import BufferClient, BufferError
-from socials.report import build_last_24h, render_text
+from socials.buffer import BufferClient, BufferError, Queue
+from socials.report import (
+    DEFAULT_QUEUE_HORIZON_DAYS,
+    build_last_24h,
+    build_queue,
+    render_queue,
+    render_text,
+)
 
 
 @click.group()
@@ -34,11 +40,18 @@ _FETCH_SKEW = timedelta(hours=6)
     type=click.IntRange(min=1),
     help="How far back to report.",
 )
-def report(hours: int) -> None:
-    """Report what happened on The Flip's social channels in the last N hours.
+@click.option(
+    "--queue-days",
+    default=DEFAULT_QUEUE_HORIZON_DAYS,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="How far ahead to show the queue.",
+)
+def report(hours: int, queue_days: int) -> None:
+    """Report recent activity and the upcoming queue for The Flip's social channels.
 
     Reads from Buffer (all connected channels). Engagement metrics are shown where Buffer
-    provides them; see docs/plans/buffer-24h-report.md.
+    provides them; see docs/plans/buffer-24h-report.md and queued-posts-report.md.
     """
     try:
         token = config.require_env("BUFFER_API_KEY")
@@ -48,13 +61,23 @@ def report(hours: int) -> None:
     click.echo("Fetching from Buffer…", err=True)
     now = datetime.now(UTC)
     start = now - timedelta(hours=hours)
+    queue: Queue | None = None
     try:
         with BufferClient(token) as client:
             org_id = client.organization_id()
             channels = client.channels(org_id)
             sent = client.sent_posts(org_id, start - _FETCH_SKEW, now)
+            # The queue is secondary — if it fails, still show the activity report.
+            try:
+                queue = client.queued_posts(org_id, now, horizon_days=queue_days)
+            except BufferError:
+                queue = None
     except BufferError as exc:
         raise click.ClickException(str(exc)) from None
 
-    report_data = build_last_24h(sent, channels, now, hours=hours)
-    click.echo(render_text(report_data), nl=False)
+    click.echo(render_text(build_last_24h(sent, channels, now, hours=hours)), nl=False)
+    click.echo("")
+    if queue is None:
+        click.echo("Queued\n  ⚠ Could not fetch the queue from Buffer this time.")
+    else:
+        click.echo(render_queue(build_queue(queue, now, horizon_days=queue_days)), nl=False)
