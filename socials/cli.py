@@ -1,26 +1,60 @@
 """Command-line entry point for socials.
 
-The CLI is the first surface (reports run from a terminal); Discord delivery and a
-web interface come later. See docs/plans/Product.md for the "why".
+The CLI is the first surface (reports run from a terminal); Discord delivery and a web
+interface come later. See docs/plans/Product.md for the "why".
 """
 
+from datetime import UTC, datetime, timedelta
+
 import click
+
+from socials import config
+from socials.buffer import BufferClient, BufferError
+from socials.report import build_last_24h, render_text
 
 
 @click.group()
 @click.version_option()
 def cli() -> None:
     """Reporting, alerts, and assistance for The Flip's social media volunteers."""
+    config.load_env()
+
+
+# Posts are windowed server-side on `dueAt` (scheduled time) but reported on `sentAt` (actual
+# send time). Fetch a little earlier so a post that sent slightly after its scheduled time
+# isn't missed; build_last_24h then filters exactly on `sentAt`.
+_FETCH_SKEW = timedelta(hours=6)
 
 
 @cli.command()
-def report() -> None:
-    """Run a social-media report.
+@click.option(
+    "--hours",
+    default=24,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="How far back to report.",
+)
+def report(hours: int) -> None:
+    """Report what happened on The Flip's social channels in the last N hours.
 
-    Placeholder: no platforms are connected yet. Instagram is the first planned
-    integration — see docs/plans/Product.md.
+    Reads from Buffer (all connected channels). Engagement metrics are shown where Buffer
+    provides them; see docs/plans/buffer-24h-report.md.
     """
-    raise click.ClickException(
-        "No reports are implemented yet. Instagram reporting is the first planned "
-        "feature — see docs/plans/Product.md."
-    )
+    try:
+        token = config.require_env("BUFFER_API_KEY")
+    except config.MissingConfigError as exc:
+        raise click.ClickException(str(exc)) from None
+
+    click.echo("Fetching from Buffer…", err=True)
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=hours)
+    try:
+        with BufferClient(token) as client:
+            org_id = client.organization_id()
+            channels = client.channels(org_id)
+            sent = client.sent_posts(org_id, start - _FETCH_SKEW, now)
+    except BufferError as exc:
+        raise click.ClickException(str(exc)) from None
+
+    report_data = build_last_24h(sent, channels, now, hours=hours)
+    click.echo(render_text(report_data), nl=False)

@@ -9,6 +9,15 @@ the current shape and the intended direction. Keep it current as modules land.
   (`socials`). This is the first and, for now, only surface. Report commands hang off this
   group. User-facing failures raise `click.ClickException` (a clean message + non-zero exit),
   never a traceback.
+- **`socials/config.py`** — loads a local `.env` (via `python-dotenv`'s `find_dotenv`, so it
+  works from a subdirectory) and reads required secrets from the environment.
+- **`socials/buffer.py`** — a read-only client for [Buffer](https://buffer.com)'s Public
+  GraphQL API (`https://api.buffer.com`), the **first data source**. Resolves the org, lists
+  channels, and fetches sent posts in a window. Typed dataclasses; errors become `BufferError`
+  with messages that never carry the token. See [`plans/buffer-24h-report.md`](plans/buffer-24h-report.md).
+- **`socials/report.py`** — the "last N hours" report: a **pure** `build_last_24h` returning a
+  typed `Report`, and a separate `render_text` formatter (so Discord/web formatters can reuse
+  the builder). Powers `socials report`.
 
 ## Intended direction
 
@@ -26,11 +35,10 @@ shape is expected to grow into roughly three layers, each introduced with its ow
 
 ## Conventions
 
-- **Secrets** (Instagram/Discord tokens) come from the environment — see `.env.example`.
-  Never hardcode credentials. When the first credential-consuming feature lands, the CLI should
-  auto-load a local `.env` at startup (via `python-dotenv`) so volunteers don't have to manage
-  shell exports — deliberately deferred until there's a secret to load, to avoid an unused
-  dependency.
+- **Secrets** (Buffer/Instagram/Discord tokens) come from the environment — see `.env.example`.
+  Never hardcode credentials, and never put a token in an error message or log. The CLI
+  auto-loads a local `.env` at startup (`config.load_env`) so contributors don't manage shell
+  exports; an already-set environment variable always wins.
 - **Dependencies** are added with `uv add` / `uv add --dev` at their latest stable version.
 - **One module, one responsibility.** Keep fetching, analysis, formatting, and delivery
   separable rather than fused into one command function.

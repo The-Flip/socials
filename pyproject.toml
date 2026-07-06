@@ -5,6 +5,9 @@ description = "Reporting, alerts, and assistance for The Flip's social media vol
 requires-python = ">=3.14"
 dependencies = [
     "click",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.2",
+    "tzdata>=2026.2",
 ]
 
 [build-system]
@@ -22,6 +25,7 @@ dev = [
     "mypy>=1.15",
     "pre-commit>=4.2",
     "pytest>=9.0.2",
+    "respx>=0.23.1",
     "ruff>=0.15.7",
 ]
 

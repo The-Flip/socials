@@ -150,10 +150,13 @@ uv run pre-commit install --hook-type pre-push   # Install the pre-push test hoo
 
 ```bash
 uv run socials --help            # Show the CLI
-uv run socials report            # Run a report (placeholder until Instagram lands)
+uv run socials report            # Last-24h activity across Buffer channels (needs BUFFER_API_KEY)
+uv run socials report --hours 72 # Widen the window
 uv add <package>                 # Add a runtime dependency
 uv add --dev <package>           # Add a dev dependency
 ```
+
+`report` reads from Buffer; set `BUFFER_API_KEY` (see `.env.example`) in `.env`.
 
 ### Quality & Testing
 
@@ -178,11 +181,16 @@ make review-change                           # AGY reviews the branch's change s
 
 - **`socials/cli.py`** — Click CLI entry point (`socials`). The first and (for now) only
   surface. Report commands hang off this group.
+- **`socials/config.py`** — loads `.env` (`find_dotenv`) and reads required secrets from the env.
+- **`socials/buffer.py`** — read-only client for Buffer's Public GraphQL API (the first data
+  source); typed dataclasses, `BufferError` for failures (never leaks the token).
+- **`socials/report.py`** — pure `build_last_24h` → typed `Report`, plus a `render_text`
+  formatter kept separate so Discord/web formatters can reuse the builder.
 
-The project is young; this section grows as modules are added. Planned shape: a `report`
-layer that runs analyses, platform clients (Instagram first, then others) behind a common
-interface, and delivery targets (terminal now, Discord later). Each of these lands with its
-own [`docs/plans/`](docs/plans/) ADR.
+See [`docs/Architecture.md`](docs/Architecture.md) for detail. The project is young; this grows
+as modules land. Planned shape: platform clients behind a common interface (Buffer now,
+Instagram-direct later) and delivery targets (terminal now, Discord later) — each with its own
+[`docs/plans/`](docs/plans/) ADR.
 
 ## Project Structure
 

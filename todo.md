@@ -1,0 +1,3 @@
+- Add fetching of statistics from Instagram and Facebook
+- To the daily report, add information on queued posts.
+- Post the basic daily report to Discord.
