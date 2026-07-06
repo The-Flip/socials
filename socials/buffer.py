@@ -8,8 +8,9 @@ aren't exposed, and posts filter on `dueAt` (not `sentAt`).
 Errors surface as `BufferError` with a message that never includes the token or request headers.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -55,6 +56,23 @@ class SentPosts:
     truncated: bool  # True if pagination hit MAX_PAGES before exhausting the window
 
 
+@dataclass(frozen=True)
+class QueuedPost:
+    due_at: datetime | None  # scheduled time; may be absent for needs_approval posts
+    channel_id: str
+    channel_service: str
+    channel_name: str
+    status: str  # "scheduled" or "needs_approval"
+    media_type: str | None  # "video" / "photo" / "media" / None (text-only)
+
+
+@dataclass(frozen=True)
+class Queue:
+    scheduled: list[QueuedPost]  # in the requested window, sorted soonest-first
+    awaiting_approval: list[QueuedPost]
+    truncated: bool
+
+
 _CHANNELS_QUERY = """
 query ($org: OrganizationId!) {
   channels(input: { organizationId: $org }) { id name service isDisconnected }
@@ -69,6 +87,34 @@ query ($org: OrganizationId!, $start: DateTime!, $end: DateTime!, $first: Int!, 
     after: $after
   ) {
     edges { cursor node { sentAt channel { id service name } externalLink metrics { name value unit } } }
+    pageInfo { hasNextPage }
+  }
+}
+"""
+
+# Queued posts (no metrics; `assets` lets us show a media-type indicator). `status` takes a single
+# enum, and needs_approval posts aren't time-bound, so scheduled/approval are two separate queries.
+_SCHEDULED_QUERY = """
+query ($org: OrganizationId!, $start: DateTime!, $end: DateTime!, $first: Int!, $after: String) {
+  posts(
+    input: { organizationId: $org, filter: { status: scheduled, dueAt: { start: $start, end: $end } } }
+    first: $first
+    after: $after
+  ) {
+    edges { cursor node { dueAt status channel { id service name } assets { __typename } } }
+    pageInfo { hasNextPage }
+  }
+}
+"""
+
+_APPROVAL_QUERY = """
+query ($org: OrganizationId!, $first: Int!, $after: String) {
+  posts(
+    input: { organizationId: $org, filter: { status: needs_approval } }
+    first: $first
+    after: $after
+  ) {
+    edges { cursor node { dueAt status channel { id service name } assets { __typename } } }
     pageInfo { hasNextPage }
   }
 }
@@ -154,31 +200,56 @@ class BufferClient:
             for c in (data.get("channels") or [])
         ]
 
-    def sent_posts(self, org_id: str, start: datetime, end: datetime) -> SentPosts:
-        """Fetch posts with status `sent` whose `dueAt` falls in [start, end], paginated."""
-        posts: list[Post] = []
+    def _collect[T](
+        self, query: str, base_vars: dict, parse: Callable[[dict], T]
+    ) -> tuple[list[T], bool]:
+        """Page through a `posts(...)` query, returning (items, truncated_at_cap)."""
+        items: list[T] = []
         after: str | None = None
-        truncated = False
         for _ in range(MAX_PAGES):
-            data = self._gql(
-                _POSTS_QUERY,
-                {
-                    "org": org_id,
-                    "start": _to_iso(start),
-                    "end": _to_iso(end),
-                    "first": PAGE_SIZE,
-                    "after": after,
-                },
-            )
+            data = self._gql(query, {**base_vars, "first": PAGE_SIZE, "after": after})
             conn = data.get("posts") or {}
             edges = conn.get("edges") or []
-            posts.extend(_parse_post(e["node"]) for e in edges)
+            items.extend(parse(e["node"]) for e in edges)
             if not (conn.get("pageInfo") or {}).get("hasNextPage") or not edges:
-                break
+                return items, False
             after = edges[-1].get("cursor")
-        else:
-            truncated = True
+        return items, True
+
+    def sent_posts(self, org_id: str, start: datetime, end: datetime) -> SentPosts:
+        """Fetch posts with status `sent` whose `dueAt` falls in [start, end], paginated."""
+        posts, truncated = self._collect(
+            _POSTS_QUERY,
+            {"org": org_id, "start": _to_iso(start), "end": _to_iso(end)},
+            _parse_post,
+        )
         return SentPosts(posts=posts, truncated=truncated)
+
+    def queued_posts(self, org_id: str, now: datetime, *, horizon_days: int = 7) -> Queue:
+        """Fetch the queue: `scheduled` posts due within the horizon, plus `needs_approval`.
+
+        Two queries because Buffer's `status` filter is a single enum and needs_approval posts
+        aren't time-bound. Scheduled posts are sorted soonest-first.
+        """
+        scheduled, sched_truncated = self._collect(
+            _SCHEDULED_QUERY,
+            {
+                "org": org_id,
+                "start": _to_iso(now),
+                "end": _to_iso(now + timedelta(days=horizon_days)),
+            },
+            _parse_queued,
+        )
+        approval, appr_truncated = self._collect(_APPROVAL_QUERY, {"org": org_id}, _parse_queued)
+        scheduled.sort(key=lambda q: q.due_at or _FAR_FUTURE)
+        return Queue(
+            scheduled=scheduled,
+            awaiting_approval=approval,
+            truncated=sched_truncated or appr_truncated,
+        )
+
+
+_FAR_FUTURE = datetime.max.replace(tzinfo=UTC)  # sorts due_at=None queued posts last
 
 
 def _to_iso(value: datetime) -> str:
@@ -206,3 +277,27 @@ def _parse_post(node: dict) -> Post:
         external_link=node.get("externalLink"),
         metrics=metrics,
     )
+
+
+def _parse_queued(node: dict) -> QueuedPost:
+    channel = node.get("channel") or {}
+    due = node.get("dueAt")
+    return QueuedPost(
+        due_at=_parse_dt(due) if due else None,
+        channel_id=channel.get("id") or "",
+        channel_service=channel.get("service") or "unknown",
+        channel_name=channel.get("name") or "",
+        status=node.get("status") or "",
+        media_type=_media_type(node.get("assets") or []),
+    )
+
+
+def _media_type(assets: list[dict]) -> str | None:
+    """Derive a display label from asset __typenames (e.g. VideoAsset → 'video')."""
+    kinds = {a["__typename"].removesuffix("Asset").lower() for a in assets if a.get("__typename")}
+    kinds.discard("")
+    if not kinds:
+        return None
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "media"

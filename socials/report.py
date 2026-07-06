@@ -10,10 +10,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from socials.buffer import Channel, Metric, Post, SentPosts
+from socials.buffer import Channel, Metric, Post, Queue, QueuedPost, SentPosts
 
 # The Flip is in Chicago; show times in its local timezone for the volunteers.
 DISPLAY_TZ = "America/Chicago"
+DEFAULT_QUEUE_HORIZON_DAYS = 7
 _PREFERRED_SERVICES = ("instagram", "facebook", "youtube")
 _PREFERRED_METRICS = (
     "Impressions",
@@ -133,6 +134,78 @@ def render_text(report: Report, *, tz_name: str = DISPLAY_TZ) -> str:
         )
         lines.append("  those will come from the Instagram API in a future update.")
     return "\n".join(lines).rstrip() + "\n"
+
+
+@dataclass(frozen=True)
+class QueueReport:
+    scheduled: list[QueuedPost]  # within the horizon, soonest-first
+    awaiting_approval: list[QueuedPost]
+    horizon_days: int
+    truncated: bool
+
+
+def build_queue(
+    queue: Queue, now: datetime, *, horizon_days: int = DEFAULT_QUEUE_HORIZON_DAYS
+) -> QueueReport:
+    """Structure the queue for rendering: scheduled posts within the horizon, soonest-first."""
+    end = now + timedelta(days=horizon_days)
+    scheduled = sorted(
+        (q for q in queue.scheduled if q.due_at is not None and now <= q.due_at <= end),
+        key=lambda q: q.due_at or now,
+    )
+    return QueueReport(
+        scheduled=scheduled,
+        awaiting_approval=list(queue.awaiting_approval),
+        horizon_days=horizon_days,
+        truncated=queue.truncated,
+    )
+
+
+def render_queue(queue: QueueReport, *, tz_name: str = DISPLAY_TZ) -> str:
+    """Render the upcoming/pending queue as a report section."""
+    tz = _display_tz(tz_name)
+    days = queue.horizon_days
+    n_sched = len(queue.scheduled)
+    n_appr = len(queue.awaiting_approval)
+    lines = [
+        f"Queued — next {days} day{_s(days)}",
+        f"  {n_sched} scheduled · {n_appr} awaiting approval",
+    ]
+    if queue.truncated:
+        lines.append("  (queue truncated at the page limit — some upcoming posts may be omitted)")
+
+    if n_sched == 0:
+        alert = f"  ⚠ Nothing scheduled in the next {days} day{_s(days)}"
+        if n_appr:
+            alert += f" (but {n_appr} awaiting approval)"
+        lines.append(alert + ".")
+    else:
+        lines.extend(f"  • {_fmt_queued(q, tz)}" for q in queue.scheduled)
+        if n_sched == 1:
+            lines.append("  ⚠ Only 1 post scheduled — the queue is running low.")
+
+    if n_appr:
+        lines.append("  Awaiting approval:")
+        lines.extend(f"  • {_fmt_queued(q, tz)}" for q in queue.awaiting_approval)
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _fmt_queued(post: QueuedPost, tz: ZoneInfo | timezone) -> str:
+    when = _fmt_time(post.due_at, tz) if post.due_at else "(no scheduled time)"
+    name = f" ({post.channel_name})" if post.channel_name else ""
+    media = f"  [{_media_label(post.media_type)}]" if post.media_type else ""
+    return f"{when}  {_service_label(post.channel_service)}{name}{media}"
+
+
+def _media_label(kind: str) -> str:
+    return {
+        "image": "Photo",
+        "photo": "Photo",
+        "video": "Video",
+        "gif": "GIF",
+        "media": "Media",
+    }.get(kind, kind.capitalize())
 
 
 def _ordered_channels(channels: list[Channel], posts: Iterable[Post]) -> list[tuple[str, str, str]]:

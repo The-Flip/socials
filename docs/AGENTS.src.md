@@ -175,14 +175,17 @@ uv run pre-commit install --hook-type pre-push   # Install the pre-push test hoo
 ## Commands
 
 ```bash
-uv run socials --help            # Show the CLI
-uv run socials report            # Last-24h activity across Buffer channels (needs BUFFER_API_KEY)
-uv run socials report --hours 72 # Widen the window
-uv add <package>                 # Add a runtime dependency
-uv add --dev <package>           # Add a dev dependency
+uv run socials --help              # Show the CLI
+uv run socials report              # Recent activity + upcoming queue across Buffer channels
+uv run socials report --hours 72   # Widen the activity window
+uv run socials report --queue-days 14  # Widen the queue horizon
+uv add <package>                   # Add a runtime dependency
+uv add --dev <package>             # Add a dev dependency
 ```
 
-`report` reads from Buffer; set `BUFFER_API_KEY` (see `.env.example`) in `.env`.
+`report` reads from Buffer; set `BUFFER_API_KEY` (see `.env.example`) in `.env`. It shows recent
+sent posts (with engagement where Buffer provides it) and the upcoming queue (scheduled + awaiting
+approval), flagging an empty queue.
 
 ### Quality & Testing
 
@@ -209,9 +212,10 @@ make review-change                           # AGY reviews the branch's change s
   surface. Report commands hang off this group.
 - **`socials/config.py`** — loads `.env` (`find_dotenv`) and reads required secrets from the env.
 - **`socials/buffer.py`** — read-only client for Buffer's Public GraphQL API (the first data
-  source); typed dataclasses, `BufferError` for failures (never leaks the token).
-- **`socials/report.py`** — pure `build_last_24h` → typed `Report`, plus a `render_text`
-  formatter kept separate so Discord/web formatters can reuse the builder.
+  source): `sent_posts` and `queued_posts` (the queue); typed dataclasses, `BufferError` for
+  failures (never leaks the token).
+- **`socials/report.py`** — pure builders + separate formatters (reusable for Discord/web):
+  `build_last_24h`/`render_text` (recent activity) and `build_queue`/`render_queue` (the queue).
 
 See [`docs/Architecture.md`](docs/Architecture.md) for detail. The project is young; this grows
 as modules land. Planned shape: platform clients behind a common interface (Buffer now,

@@ -13,11 +13,15 @@ the current shape and the intended direction. Keep it current as modules land.
   works from a subdirectory) and reads required secrets from the environment.
 - **`socials/buffer.py`** — a read-only client for [Buffer](https://buffer.com)'s Public
   GraphQL API (`https://api.buffer.com`), the **first data source**. Resolves the org, lists
-  channels, and fetches sent posts in a window. Typed dataclasses; errors become `BufferError`
-  with messages that never carry the token. See [`plans/buffer-24h-report.md`](plans/buffer-24h-report.md).
-- **`socials/report.py`** — the "last N hours" report: a **pure** `build_last_24h` returning a
-  typed `Report`, and a separate `render_text` formatter (so Discord/web formatters can reuse
-  the builder). Powers `socials report`.
+  channels, fetches sent posts in a window (`sent_posts`), and fetches the **queue**
+  (`queued_posts`: scheduled posts within a horizon + those awaiting approval). Typed
+  dataclasses; errors become `BufferError` with messages that never carry the token. See
+  [`plans/buffer-24h-report.md`](plans/buffer-24h-report.md) and
+  [`plans/queued-posts-report.md`](plans/queued-posts-report.md).
+- **`socials/report.py`** — report building/rendering, split so Discord/web formatters can reuse
+  the builders: `build_last_24h` → `Report` + `render_text` (recent activity), and a **separate**
+  `build_queue` → `QueueReport` + `render_queue` (the upcoming/pending queue, with an empty-queue
+  alert). Both power `socials report`.
 
 ## Intended direction
 
