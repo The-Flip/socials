@@ -20,17 +20,26 @@ def cli() -> None:
     config.load_env()
 
 
+# Posts are windowed server-side on `dueAt` (scheduled time) but reported on `sentAt` (actual
+# send time). Fetch a little earlier so a post that sent slightly after its scheduled time
+# isn't missed; build_last_24h then filters exactly on `sentAt`.
+_FETCH_SKEW = timedelta(hours=6)
+
+
 @cli.command()
-@click.option("--hours", default=24, show_default=True, help="How far back to report.")
+@click.option(
+    "--hours",
+    default=24,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="How far back to report.",
+)
 def report(hours: int) -> None:
     """Report what happened on The Flip's social channels in the last N hours.
 
     Reads from Buffer (all connected channels). Engagement metrics are shown where Buffer
     provides them; see docs/plans/buffer-24h-report.md.
     """
-    if hours <= 0:
-        raise click.BadParameter("must be a positive number of hours", param_hint="--hours")
-
     try:
         token = config.require_env("BUFFER_API_KEY")
     except config.MissingConfigError as exc:
@@ -43,7 +52,7 @@ def report(hours: int) -> None:
         with BufferClient(token) as client:
             org_id = client.organization_id()
             channels = client.channels(org_id)
-            sent = client.sent_posts(org_id, start, now)
+            sent = client.sent_posts(org_id, start - _FETCH_SKEW, now)
     except BufferError as exc:
         raise click.ClickException(str(exc)) from None
 

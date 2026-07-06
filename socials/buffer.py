@@ -83,6 +83,7 @@ class BufferClient:
     ) -> None:
         self._token = token
         self._base_url = base_url
+        self._owns_client = client is None
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS)
 
     def __enter__(self) -> BufferClient:
@@ -92,7 +93,9 @@ class BufferClient:
         self.close()
 
     def close(self) -> None:
-        self._client.close()
+        # Only close a client we created — a caller-supplied client is the caller's to manage.
+        if self._owns_client:
+            self._client.close()
 
     def _gql(self, query: str, variables: dict | None = None) -> dict:
         try:
@@ -121,9 +124,11 @@ class BufferClient:
             raise BufferError("Buffer API returned a non-JSON response.") from None
 
         # GraphQL reports errors inside a 200 OK body — check even on success.
-        if payload.get("errors"):
-            message = payload["errors"][0].get("message", "unknown error")
-            raise BufferError(f"Buffer API error: {message}")
+        errors = payload.get("errors")
+        if errors:
+            first = errors[0]
+            message = first.get("message") if isinstance(first, dict) else str(first)
+            raise BufferError(f"Buffer API error: {message or 'unknown error'}")
         return payload.get("data") or {}
 
     def organization_id(self) -> str:
@@ -182,7 +187,8 @@ def _to_iso(value: datetime) -> str:
 
 
 def _parse_dt(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # Python 3.11+ fromisoformat parses the trailing "Z" natively.
+    return datetime.fromisoformat(value)
 
 
 def _parse_post(node: dict) -> Post:
